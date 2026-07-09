@@ -1,3 +1,3 @@
-# code_katamari
+# Code Katamari
 
 This repo is intended for miscellaneous code uploads
