@@ -139,11 +139,14 @@ GROUP BY
 )
 
 SELECT 
-		ps.product_name,
-		ap.category,
-		ps.quant_sold_per_product AS total_units_sold
+			ps.product_name,
+			ap.category,
+			ps.quant_sold_per_product AS total_units_sold
 FROM 
-		active_products ap LEFT JOIN product_sales ps ON ap.product_id = ps.product_id;
+		          	   active_products ap 
+       		 LEFT JOIN product_sales   ps ON ap.product_id = ps.product_id
+ORDER BY 
+			total_units_sold DESC;
 
 
 -- ─────────────────────────────────────────────────────────────
@@ -160,7 +163,7 @@ WITH clean_customers AS (
            CASE country
                WHEN 'US'  THEN 'United States'
                WHEN 'USA' THEN 'United States'
-               ELSE country
+               ELSE COALESCE(country, 'Unknown')
            END AS country_std,
            tier
     FROM   customers
@@ -204,53 +207,70 @@ ORDER BY country_std, tier;
 --   - total_spent (completed payments only, COALESCE to 0)
 -- Sort by total_spent DESC.
 -- Use at least 3 CTEs.
-
+PRAGMA table_info(payments);
 SELECT DISTINCT status FROM orders; 
 
 WITH customers_clean AS (
 SELECT 
-		id                                                AS customer_id,
+		id                                                                   AS customer_id,
 		first_name,
 		last_name,
-		coalesce(trim(email), "nothingemail@nowhere.abyss") AS email,
+		coalesce(trim(email), "nothingemail@nowhere.abyss")                  AS email,
 		CASE
 				WHEN country in ("US", "USA") THEN "United States"
-				ELSE country
-		END AS country,
+				ELSE COALESCE(country, 'Unknown')
+		END                                                                  AS country,
 		tier
 FROM 
 		customers
 ),
-
-orders_by_cust AS (
+order_status AS (
 SELECT 
-			customer_id                                    AS customer_id,
-			count(DISTINCT id)                             AS total_orders,
-			count(DISTINCT CASE WHEN status = "delivered" THEN 1 ELSE 0 END)  AS delivered_orders
+			customer_id,
+			count(*)                                                   	   AS total_orders,
+			sum(CASE WHEN status = "delivered" THEN 1 ELSE 0 END)          AS delivered_orders
 FROM 
 			orders
 GROUP BY 
 			customer_id
-)
-
-joined_tables AS (
+),
+payment_status (
 SELECT 
-		*
+			o.customer_id,
+			sum(p.amount)              AS total_spent
 FROM 
-		customers_clean cc LEFT JOIN orders_by_cust oc using(customer_id)
-						   LEFT JOIN payments ON 
+			Payments p
+			INNER JOIN orders o ON p.order_id =  o.id 
+WHERE 
+			p.status = "completed"
+GROUP BY
+			o.customer_id
+),
+
+SELECT 
+			cc.customer_id,
+			cc.first_name,
+			cc.last_name,
+			cc.email,
+			cc.contry,
+			cc.tier,
+			os.total_orders,
+			os.delivered_orders,
+			ps.total_spent
+			
+FROM 
+				  	  customers_clean cc
+			LEFT JOIN order_status    os using(customer_id)
+			LEFT JOIN payment_status  ps using(customer_id)
+ORDER BY 
+			total_spent DESC;
 		
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+		
+		
+SELECT 
+			order_id,
+			sum(CASE WHEN status = "delivered" THEN amount ELSE 0 END)              AS total_spent
+FROM 
+			Payments
+GROUP BY
+			order_id
